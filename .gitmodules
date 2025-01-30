@@ -1,0 +1,4 @@
+[submodule "app/nginx-1.25.2"]
+	path = app/nginx-1.25.2
+	url = https://github.com/wkgcass/libnginx
+	branch = 1.25.2-ff
