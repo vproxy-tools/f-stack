@@ -905,6 +905,8 @@ ini_parse_handler(void* user, const char* section, const char* name,
         pconfig->dpdk.pkt_tx_delay = atoi(value);
     } else if (MATCH("dpdk", "symmetric_rss")) {
         pconfig->dpdk.symmetric_rss = atoi(value);
+    } else if (MATCH("dpdk", "eal_args")) {
+        pconfig->dpdk.eal_args = strdup(value);
     } else if (MATCH("kni", "enable")) {
         pconfig->kni.enable= atoi(value);
     } else if (MATCH("kni", "type")) {
@@ -1096,6 +1098,27 @@ dpdk_args_setup(struct ff_config *cfg)
                 }
                 dpdk_argv[n++] = strdup(temp);
         }
+    }
+
+    if (cfg->dpdk.eal_args) {
+        char* start = cfg->dpdk.eal_args;
+        while (1) {
+            for (int i = 0; ; ++i) {
+                if (start[i] == ' ' || start[i] == 0) {
+                    if (i != 0) {
+                        memcpy(temp, start, i);
+                        temp[i] = 0;
+                        dpdk_argv[n++] = strdup(temp);
+                    }
+                    if (start[i] == 0) {
+                        goto loop_break;
+                    }
+                    start = start + i + 1;
+                    break; // will start again
+                }
+            }
+        }
+        loop_break: ;
     }
 
     dpdk_argc = n;

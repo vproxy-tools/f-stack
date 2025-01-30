@@ -210,6 +210,9 @@ struct ff_config {
         /* load an external driver */
         char *pci_whitelist;
 
+        /* extra eal_args */
+        char *eal_args;
+
         int nb_channel;
         int memory;
         int no_huge;
