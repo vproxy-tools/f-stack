@@ -74,7 +74,7 @@ HOST_INCLUDES+= -I/usr/local/include/libepoll-shim
 endif
 
 ifndef DEBUG
-HOST_CFLAGS = -O2 -frename-registers  -funswitch-loops -fweb -Wno-format-truncation
+HOST_CFLAGS = -g -O2 -frename-registers  -funswitch-loops -fweb -Wno-format-truncation
 else
 HOST_CFLAGS = ${DEBUG} 
 endif
