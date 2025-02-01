@@ -125,6 +125,9 @@ parse_lcore_mask(struct ff_config *cfg, const char *coremask)
             }
         }
     }
+    if (cfg->dpdk.multi_thread_mode) {
+        cfg->dpdk.proc_mask = strdup(coremask);
+    }
 
     for (; i >= 0; i--)
         if (coremask[i] != '0')
@@ -907,6 +910,8 @@ ini_parse_handler(void* user, const char* section, const char* name,
         pconfig->dpdk.symmetric_rss = atoi(value);
     } else if (MATCH("dpdk", "eal_args")) {
         pconfig->dpdk.eal_args = strdup(value);
+    } else if (MATCH("dpdk", "multi_thread_mode")) {
+        pconfig->dpdk.multi_thread_mode = atoi(value);
     } else if (MATCH("kni", "enable")) {
         pconfig->kni.enable= atoi(value);
     } else if (MATCH("kni", "type")) {

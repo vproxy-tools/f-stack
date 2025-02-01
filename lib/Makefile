@@ -114,6 +114,9 @@ endif
 HOST_CFLAGS+= -DINET
 CFLAGS+= -DINET
 
+HOST_CFLAGS+= -fPIC
+CFLAGS+= -fPIC
+
 GCCVERGE10 = $(shell expr `gcc -dumpversion | cut -f1 -d.` \>= 10)
 ifeq "$(GCCVERGE10)" "1"
     CFLAGS+= -Wno-error=stringop-overflow

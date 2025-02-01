@@ -31,6 +31,8 @@
 extern "C" {
 #endif
 
+#define ff_is_primary_process() (rte_get_main_lcore() == rte_lcore_id())
+
 // dpdk argc, argv, max argc: 16, member of dpdk_config
 #define DPDK_CONFIG_NUM 16
 #define DPDK_CONFIG_MAXLEN 256
@@ -228,6 +230,12 @@ struct ff_config {
         int nb_vlan_filter;
         uint16_t vlan_filter_id[DPDK_MAX_VLAN_FILTER];
         int symmetric_rss;
+        /* Each thread uses one copy of the f-stack shared library.    *
+         * The first thread calls rte_eal_init and runs on main lcore, *
+         * other threads run on their own worker cores.                *
+         * The functions to run on workers, should be registered using *
+         * `ff_reg_worker_job(lcoreid,func,data)`                      */
+        int multi_thread_mode;
 
         /* sleep x microseconds when no pkts incomming */
         unsigned idle_sleep;

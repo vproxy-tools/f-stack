@@ -218,7 +218,7 @@ void ff_init_ref_pool(int nb_mbuf, int socketid)
             return;
     }
     snprintf(s, sizeof(s), "ff_ref_pool_%d", socketid);
-    if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (ff_is_primary_process()) {
         ff_ref_pool[socketid] = rte_pktmbuf_pool_create(s, nb_mbuf, MEMPOOL_CACHE_SIZE, 0, 0, socketid);
     } else {
         ff_ref_pool[socketid] = rte_mempool_lookup(s);

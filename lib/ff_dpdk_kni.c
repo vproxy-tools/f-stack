@@ -484,7 +484,7 @@ ff_kni_proto_filter(const void *data, uint16_t len, uint16_t eth_frame_type)
 void
 ff_kni_init(uint16_t nb_ports, int type, const char *tcp_ports, const char *udp_ports)
 {
-    if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (ff_is_primary_process()) {
         kni_stat = rte_zmalloc("kni:stat",
             sizeof(struct kni_interface_stats *) * nb_ports,
             RTE_CACHE_LINE_SIZE);
@@ -537,7 +537,7 @@ void
 ff_kni_alloc(uint16_t port_id, unsigned socket_id, int type, int port_idx,
     struct rte_mempool *mbuf_pool, unsigned ring_queue_size)
 {
-    if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (ff_is_primary_process()) {
         struct rte_eth_dev_info dev_info;
         struct rte_ether_addr addr = {{0}};
         int ret;
@@ -628,7 +628,7 @@ ff_kni_alloc(uint16_t port_id, unsigned socket_id, int type, int port_idx,
     char ring_name[RTE_KNI_NAMESIZE];
     snprintf((char*)ring_name, RTE_KNI_NAMESIZE, "kni_ring_%u", port_id);
 
-    if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (ff_is_primary_process()) {
         kni_rp[port_id] = rte_ring_create(ring_name, ring_queue_size,
             socket_id, RING_F_SC_DEQ);
 

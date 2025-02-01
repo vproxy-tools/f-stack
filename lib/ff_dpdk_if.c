@@ -116,6 +116,9 @@ static uint8_t symmetric_rsskey[52] = {
 static int rsskey_len = sizeof(default_rsskey_40bytes);
 static uint8_t *rsskey = default_rsskey_40bytes;
 
+static loop_func_t worker_func[RTE_MAX_LCORE];
+static void*       worker_data[RTE_MAX_LCORE];
+
 struct lcore_conf lcore_conf;
 
 struct rte_mempool *pktmbuf_pool[NB_SOCKETS];
@@ -151,6 +154,11 @@ ff_hardclock_job(__rte_unused struct rte_timer *timer,
     __rte_unused void *arg) {
     ff_hardclock();
     ff_update_current_ts();
+}
+
+void ff_reg_worker_job(uint32_t cid, loop_func_t f, void* data) {
+    worker_func[cid] = f;
+    worker_data[cid] = data;
 }
 
 struct ff_dpdk_if_context *
@@ -346,7 +354,7 @@ init_mem_pool(void)
             continue;
         }
 
-        if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+        if (ff_is_primary_process()) {
             snprintf(s, sizeof(s), "mbuf_pool_%d", socketid);
             pktmbuf_pool[socketid] =
                 rte_pktmbuf_pool_create(s, nb_mbuf,
@@ -385,7 +393,7 @@ create_ring(const char *name, unsigned count, int socket_id, unsigned flags)
         rte_exit(EXIT_FAILURE, "create ring failed, no name!\n");
     }
 
-    if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (ff_is_primary_process()) {
         ring = rte_ring_create(name, count, socket_id, flags);
     } else {
         ring = rte_ring_lookup(name);
@@ -463,7 +471,7 @@ init_msg_ring(void)
     unsigned socketid = lcore_conf.socket_id;
 
     /* Create message buffer pool */
-    if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (ff_is_primary_process()) {
         message_pool = rte_mempool_create(FF_MSG_POOL,
            MSG_RING_SIZE * 2 * nb_procs,
            MAX_MSG_BUF_SIZE, MSG_RING_SIZE / 2, 0,
@@ -581,7 +589,7 @@ init_port_start(void)
 
     total_nb_ports = nb_ports;
 #ifdef FF_KNI
-    if (enable_kni && rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (enable_kni && ff_is_primary_process()) {
 #ifdef FF_KNI_KNI
         if (ff_global_cfg.kni.type == KNI_TYPE_VIRTIO)
 #endif
@@ -752,7 +760,7 @@ init_port_start(void)
                 }
             }
 
-            if (rte_eal_process_type() != RTE_PROC_PRIMARY) {
+            if (!ff_is_primary_process()) {
                 continue;
             }
 
@@ -845,7 +853,7 @@ init_port_start(void)
         }
     }
 
-    if (rte_eal_process_type() == RTE_PROC_PRIMARY) {
+    if (ff_is_primary_process()) {
         check_all_ports_link_status();
     }
 
@@ -1196,9 +1204,12 @@ ff_dpdk_init(int argc, char **argv)
         exit(1);
     }
 
-    int ret = rte_eal_init(argc, argv);
-    if (ret < 0) {
-        rte_exit(EXIT_FAILURE, "Error with EAL initialization\n");
+    int ret;
+    if (!(ff_global_cfg.dpdk.multi_thread_mode && 0 == strcmp(ff_global_cfg.dpdk.proc_type, "secondary"))) {
+        ret = rte_eal_init(argc, argv);
+        if (ret < 0) {
+            rte_exit(EXIT_FAILURE, "Error with EAL initialization\n");
+        }
     }
 
     numa_on = ff_global_cfg.dpdk.numa_on;
@@ -1521,7 +1532,7 @@ process_packets(uint16_t port_id, uint16_t queue_id, struct rte_mbuf **bufs,
             }
 
 #ifdef FF_KNI
-            if (enable_kni && rte_eal_process_type() == RTE_PROC_PRIMARY) {
+            if (enable_kni && ff_is_primary_process()) {
                 mbuf_pool = pktmbuf_pool[qconf->socket_id];
                 mbuf_clone = pktmbuf_deep_clone(rtem, mbuf_pool);
                 if(mbuf_clone) {
@@ -2032,7 +2043,18 @@ ff_dpdk_raw_packet_send(void *data, int total, uint16_t port_id)
 }
 
 static int
-main_loop(void *arg)
+worker_loop(void)
+{
+    unsigned cid = rte_lcore_id();
+    if (!worker_func[cid]) {
+        rte_exit(EXIT_FAILURE, "no worker function registered on lcore %d", cid);
+        return 1;
+    }
+    return worker_func[cid](worker_data[cid]);
+}
+
+static int
+main_loop0(void *arg)
 {
     struct loop_routine *lr = (struct loop_routine *)arg;
 
@@ -2127,7 +2149,7 @@ main_loop(void *arg)
             ctx = veth_ctx[port_id];
 
 #ifdef FF_KNI
-            if (enable_kni && rte_eal_process_type() == RTE_PROC_PRIMARY) {
+            if (enable_kni && ff_is_primary_process()) {
                 ff_kni_process(port_id, queue_id, pkts_burst, MAX_PKT_BURST);
             }
 #endif
@@ -2197,6 +2219,16 @@ main_loop(void *arg)
     return 0;
 }
 
+static int
+main_loop(void *arg)
+{
+    unsigned cid = rte_lcore_id();
+    if (rte_get_main_lcore() != cid) {
+        return worker_loop();
+    }
+    return main_loop0(arg);
+}
+
 int
 ff_dpdk_if_up(void) {
     int i;
@@ -2221,8 +2253,13 @@ ff_dpdk_run(loop_func_t loop, void *arg) {
     stop_loop = 0;
     lr->loop = loop;
     lr->arg = arg;
-    rte_eal_mp_remote_launch(main_loop, lr, CALL_MAIN);
-    rte_eal_mp_wait_lcore();
+
+    if (rte_get_main_lcore() != rte_lcore_id()) {
+        main_loop0(lr);
+    } else {
+        rte_eal_mp_remote_launch(main_loop, lr, CALL_MAIN);
+        rte_eal_mp_wait_lcore();
+    }
     rte_free(lr);
 }
 
