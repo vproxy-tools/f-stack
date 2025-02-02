@@ -1790,7 +1790,7 @@ handle_msg(struct ff_msg *msg, uint16_t proc_id)
 }
 
 static inline int
-process_msg_ring(uint16_t proc_id, struct rte_mbuf **pkts_burst)
+process_msg_ring(uint16_t proc_id, struct rte_mbuf **pkts_burst, int* idle)
 {
     /* read msg from ring buf and to process */
     uint16_t nb_rb;
@@ -1805,6 +1805,7 @@ process_msg_ring(uint16_t proc_id, struct rte_mbuf **pkts_burst)
     for (i = 0; i < nb_rb; ++i) {
         handle_msg((struct ff_msg *)pkts_burst[i], proc_id);
     }
+    *idle = 0;
 
     return 0;
 }
@@ -2061,6 +2062,7 @@ main_loop0(void *arg)
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     uint64_t prev_tsc, diff_tsc, cur_tsc, usch_tsc, div_tsc, usr_tsc, sys_tsc, end_tsc, idle_sleep_tsc;
     int i, j, nb_rx, idle;
+    unsigned idle_cnt = 0;
     uint16_t port_id, queue_id;
     struct lcore_conf *qconf;
     uint64_t drain_tsc = 0;
@@ -2182,7 +2184,7 @@ main_loop0(void *arg)
             }
         }
 
-        process_msg_ring(qconf->proc_id, pkts_burst);
+        process_msg_ring(qconf->proc_id, pkts_burst, &idle);
 
         div_tsc = rte_rdtsc();
 
@@ -2192,7 +2194,7 @@ main_loop0(void *arg)
         }
 
         idle_sleep_tsc = rte_rdtsc();
-        if (likely(idle && idle_sleep)) {
+        if (likely(idle && idle_sleep && idle_cnt >= ff_global_cfg.dpdk.idle_thresh)) {
             usleep(idle_sleep);
             end_tsc = rte_rdtsc();
         } else {
@@ -2207,6 +2209,14 @@ main_loop0(void *arg)
         if (!idle) {
             sys_tsc = div_tsc - cur_tsc - usr_cb_tsc;
             ff_top_status.sys_tsc += sys_tsc;
+        }
+
+        if (idle) {
+            if (idle_cnt < ff_global_cfg.dpdk.idle_thresh) {
+                idle_cnt++;
+            }
+        } else {
+            idle_cnt = 0;
         }
 
         ff_top_status.usr_tsc += usr_tsc;

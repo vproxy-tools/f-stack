@@ -904,6 +904,8 @@ ini_parse_handler(void* user, const char* section, const char* name,
         return parse_vlan_filter_list(pconfig, value);
     } else if (MATCH("dpdk", "idle_sleep")) {
         pconfig->dpdk.idle_sleep = atoi(value);
+    } else if (MATCH("dpdk", "idle_thresh")) {
+        pconfig->dpdk.idle_thresh = atoi(value);
     } else if (MATCH("dpdk", "pkt_tx_delay")) {
         pconfig->dpdk.pkt_tx_delay = atoi(value);
     } else if (MATCH("dpdk", "symmetric_rss")) {

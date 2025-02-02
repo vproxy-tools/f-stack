@@ -239,6 +239,8 @@ struct ff_config {
 
         /* sleep x microseconds when no pkts incomming */
         unsigned idle_sleep;
+        /* only sleep if the loop keeps in idle state for multiple cycles */
+        unsigned idle_thresh;
 
         /* TX burst queue drain nodelay dalay time */
         unsigned pkt_tx_delay;
