@@ -31,7 +31,10 @@
 extern "C" {
 #endif
 
-#define ff_is_primary_process() (rte_get_main_lcore() == rte_lcore_id())
+#define ff_is_primary_process() ((!!(ff_global_cfg.dpdk.multi_thread_mode)) \
+    ? (rte_get_main_lcore() == rte_lcore_id()) \
+    : (rte_eal_process_type() == RTE_PROC_PRIMARY) \
+)
 
 // dpdk argc, argv, max argc: 16, member of dpdk_config
 #define DPDK_CONFIG_NUM 16
